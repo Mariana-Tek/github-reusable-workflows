@@ -16,7 +16,7 @@ permissions:
   contents: write # Required for actions/checkout
 
 jobs:
-  build: # Build and push image to ECR
+  retag: # retag image in ECR
     name: Retag image
     runs-on: ubuntu-latest
 
