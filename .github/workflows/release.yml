@@ -3,7 +3,7 @@ name: release #this is not a reusable workflow to be consumed
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   publish:
