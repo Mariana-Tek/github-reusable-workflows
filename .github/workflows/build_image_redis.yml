@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       tag_name:
-        required: true
         type: string
+        default: latest
       redis_port:
-        required: true
         type: integer
+        default: 6379
 
 env:
   DOCKER_BUILDKIT: 1
