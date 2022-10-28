@@ -1,12 +1,25 @@
 name: retag image
 
+# Triggers the deploy (Codepipeline) pipeline when a container
+# image is updated.  This results in an event to be emitted and
+# Codepipeline is configured to listen to ECR events and will
+# start when the event contains its image tag.   There is one
+# image tag per environment.
+
+# For this to work, the following 'secrets' must be added to this github repository:
+#
+# * AWS_REGION -- The region where the ECR repository resides
+# * AWS_ECR_ACCOUNT_URL --
+# * AWS_RESOURCE_NAME_PREFIX --
+# * BUILD_AWS_IAM_ROLE_ARN -- Github OIDC Connect enabled IAM role (https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services)
+
 on:
   workflow_call:
     inputs:
-      branch_name:
+      commit_id: # This may be the git tag, commit id or branch name.
         required: true
         type: string
-      tag_name:
+      image_tag: # Tag to add to the container image
         required: true
         type: string
 
@@ -16,38 +29,22 @@ permissions:
   contents: write # Required for actions/checkout
 
 jobs:
-  retag: # retag image in ECR
-    name: Retag image
+  retag:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check out code
-      uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
+          role-session-name: OIDCSession
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-region: ${{ secrets.AWS_REGION }}
-        role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
-        role-session-name: OIDCSession
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
-
-    - name: get-sha #retrieve branch sha
-      id: get-sha
-      run: |
-         echo ::set-output name=sha::$( curl -u "u:${{github.token}}" https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/${{ inputs.branch_name }} | jq .object.sha | tr -d '"' )
-
-    - name: Retag image
-      run: |
-         MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ steps.get-sha.outputs.sha }} --query 'images[].imageManifest' --output text)
-         echo $MANIFEST
-         docker_tag_args=""
-         for tag in "${DOCKER_TAGS[@]}"; do
-           #aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX}} --image-tag $tag --image-manifest "${MANIFEST}"
-           echo $tag
-         done
-      env:
-        DOCKER_TAGS: ${{ inputs.tag_name }},${{ github.sha }}
+      - name: Retag image
+        run: |
+          MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} --query 'images[].imageManifest' --output text)
+          aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX}} --image-tag ${{ inputs.image_tag }} --image-manifest "${MANIFEST}"
