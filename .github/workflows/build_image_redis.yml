@@ -7,7 +7,7 @@ on:
         type: string
         default: latest
       redis_port:
-        type: integer
+        type: number
         default: 6379
 
 env:
