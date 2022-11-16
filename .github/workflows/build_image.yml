@@ -17,7 +17,7 @@ on:
 
 env:
   DOCKER_BUILDKIT: 1
-  ECR_REPOSTORY: ${{ secrets.AWS_RESOURCE_NAME_PREFIX }}
+  ECR_REPOSITORY: ${{ secrets.AWS_RESOURCE_NAME_PREFIX }}
   IMAGE_TAG: ${{ github.sha }}
 
 # permission can be added at job level or workflow level
