@@ -17,7 +17,6 @@ on:
 
 env:
   DOCKER_BUILDKIT: 1
-  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
   ECR_REPOSTORY: ${{ secrets.AWS_RESOURCE_NAME_PREFIX }}
   IMAGE_TAG: ${{ github.sha }}
 
@@ -51,7 +50,11 @@ jobs:
           docker build --build-arg VERSION=${{ github.sha }} \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ inputs.tag_name }} .
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
 
       - name: Push image to Amazon ECR
         run: |
           docker push --all-tags $ECR_REGISTRY/$ECR_REPOSITORY
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
