@@ -5,8 +5,7 @@ name: Build and push to ECR
 # For this to work, the following 'secrets' must be added to this github repository:
 #
 # * AWS_REGION -- The region where the ECR repository resides
-# * AWS_ECR_ACCOUNT_URL --
-# * AWS_RESOURCE_NAME_PREFIX --
+# * AWS_RESOURCE_NAME_PREFIX -- The ECR repository name
 # * BUILD_AWS_IAM_ROLE_ARN -- Github OIDC Connect enabled IAM role (https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services)
 
 on:
@@ -55,4 +54,4 @@ jobs:
 
       - name: Push image to Amazon ECR
         run: |
-          docker push --all-tags ${{ secrets.AWS_ECR_ACCOUNT_URL }}/${{ secrets.AWS_RESOURCE_NAME_PREFIX }}
+          docker push --all-tags $ECR_REGISTRY/$ECR_REPOSITORY
