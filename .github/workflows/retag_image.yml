@@ -47,8 +47,7 @@ jobs:
       - name: Retag image
         run: |
           MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} --query 'images[].imageManifest' --output text)
-          aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX}} --image-tag ${{ inputs.image_tag }} --image-manifest "${MANIFEST}"
-          if [[ $? == 1 ]]; then
+          if ! aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX}} --image-tag ${{ inputs.image_tag }} --image-manifest "${MANIFEST}"; then
           # Upload failed.  Let's see if it's due to previously being tagged with the same tag.
             IMAGE_META="$(aws ecr describe-images --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} --image-ids imageTag=${{ inputs.image_tag }} 2> /dev/null )" #lookup for exisiting image
             if [[ $? == 0 ]]; then
