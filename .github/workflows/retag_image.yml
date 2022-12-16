@@ -47,4 +47,14 @@ jobs:
       - name: Retag image
         run: |
           MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} --query 'images[].imageManifest' --output text)
-          aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX}} --image-tag ${{ inputs.image_tag }} --image-manifest "${MANIFEST}"
+          if ! aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-tag $image_tag --image-manifest "${MANIFEST}"
+          then
+            if aws ecr list-images --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --query 'imageIds[?imageTag==`'${{ inputs.commit_id }}'`]' --output text
+            then
+              echo "image already deployed."
+            else
+              echo "image not deployed"
+              exit 1
+            fi
+          fi
+
