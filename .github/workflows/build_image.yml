@@ -14,6 +14,9 @@ on:
       tag_name:
         type: string
         default: latest
+      extra-build-args:
+        type: string
+        default: ""
 
 env:
   DOCKER_BUILDKIT: 1
@@ -49,7 +52,8 @@ jobs:
         run: |
           docker build --build-arg VERSION=${{ github.sha }} \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ inputs.tag_name }} .
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ inputs.tag_name }} \
+            ${{ inputs.extra-build-args }} .
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
 
