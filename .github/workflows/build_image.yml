@@ -14,9 +14,12 @@ on:
       tag_name:
         type: string
         default: latest
-      extra-build-args:
+      extra_build_args:
         type: string
         default: ""
+      dry_run:
+        type: boolean
+        default: false
 
 env:
   DOCKER_BUILDKIT: 1
@@ -26,7 +29,7 @@ env:
 # permission can be added at job level or workflow level
 permissions:
   id-token: write # Required to get the ID Token that will be used for OIDC
-  contents: write # Required for actions/checkout
+  contents: read # Required for actions/checkout
 
 jobs:
   build: #Build and push image to ECR
@@ -50,15 +53,25 @@ jobs:
 
       - name: Build and tag image
         run: |
-          docker build --build-arg VERSION=${{ github.sha }} \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ inputs.tag_name }} \
-            ${{ inputs.extra-build-args }} .
+          if [ "${{ inputs.dry_run }}" == "false" ]
+          then
+            docker build --build-arg VERSION=${{ github.sha }} \
+              -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+              -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ inputs.tag_name }} \
+              ${{ inputs.extra_build_args }} .
+          else
+            echo "DRYRUN: Run command to build image"
+          fi
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
 
       - name: Push image to Amazon ECR
         run: |
-          docker push --all-tags $ECR_REGISTRY/$ECR_REPOSITORY
+          if [ "${{ inputs.dry_run }}" == "false" ]
+          then
+            docker push --all-tags $ECR_REGISTRY/$ECR_REPOSITORY
+          else
+            echo "DRYRUN: Run command to push image to $ECR_REGISTRY/$ECR_REPOSITORY"
+          fi
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}

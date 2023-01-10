@@ -1,0 +1,80 @@
+name: retag image with approvals
+
+# Triggers the deploy (Codepipeline) pipeline when a container
+# image is updated.  This results in an event to be emitted and
+# Codepipeline is configured to listen to ECR events and will
+# start when the event contains its image tag.   There is one
+# image tag per environment.
+#
+# This variant supports environments for approvals
+# Ref: https://colinsalmcorner.com/consuming-environment-secrets-in-reusable-workflows/
+# If per-environment secrets are needed, then this can't
+# be used.  :-(
+
+# For this to work, the following 'secrets' must be added to this github repository:
+#
+# * AWS_REGION -- The region where the ECR repository resides
+# * AWS_ECR_ACCOUNT_URL --
+# * AWS_RESOURCE_NAME_PREFIX --
+# * BUILD_AWS_IAM_ROLE_ARN -- Github OIDC Connect enabled IAM role (https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services)
+
+on:
+  workflow_call:
+    inputs:
+      commit_id:
+        required: true
+        description: git tag or commit id to deploy
+        type: string
+      image_tag:
+        required: true
+        description: tag to add to the container image
+        type: string
+      environment_name:
+        required: true
+        description: environment to deploy to
+        type: string
+      dry_run:
+        type: boolean
+        default: false
+
+# permission can be added at job level or workflow level
+permissions:
+  id-token: write # Required to get the ID Token that will be used for OIDC
+  contents: read # Required for actions/checkout
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment_name }} # The github settings for the environment defined if approvals are needed
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
+          role-session-name: OIDCSession
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Retag image
+        run: |
+          if [ "${{ inputs.dry_run }}" == "false" ]
+          then
+            MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} --query 'images[].imageManifest' --output text)
+            if ! aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-tag ${{ inputs.image_tag }} --image-manifest "${MANIFEST}"
+            then
+              if aws ecr list-images --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --query 'imageIds[?imageTag==`'${{ inputs.commit_id }}'`]' --output text
+              then
+                echo "image already deployed."
+              else
+                echo "image not deployed"
+                exit 1
+              fi
+            fi
+          else
+            echo "DRYRUN: Run commands to add tags to an image"
+          fi
