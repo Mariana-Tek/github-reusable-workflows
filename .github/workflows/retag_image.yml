@@ -26,7 +26,7 @@ on:
 # permission can be added at job level or workflow level
 permissions:
   id-token: write # Required to get the ID Token that will be used for OIDC
-  contents: write # Required for actions/checkout
+  contents: read # Required for actions/checkout
 
 jobs:
   retag:
@@ -46,15 +46,24 @@ jobs:
 
       - name: Retag image
         run: |
-          MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} --query 'images[].imageManifest' --output text)
-          if ! aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-tag ${{ inputs.image_tag }} --image-manifest "${MANIFEST}"
+          set -x
+            
+          MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} \
+            --query 'images[].imageManifest' --output text)
+          [ $? -ne 0 ] && exit 1
+
+          status=0
+          OUTPUT=$(aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-tag ${{ inputs.image_tag }} \
+            --image-manifest "${MANIFEST}" 2>&1 || status=$?)
+          if [ $status -ne 0 ]
           then
-            if aws ecr list-images --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --query 'imageIds[?imageTag==`'${{ inputs.commit_id }}'`]' --output text
-            then
-              echo "image already deployed."
-            else
-              echo "image not deployed"
-              exit 1
-            fi
+             if echo $OUTPUT | grep "ImageAlreadyExistsException"
+             then
+                echo "Image has already been deploy"
+                exit 0
+              fi
+              exit $status
           fi
 
+        env:
+          AWS_PAGER: ""
