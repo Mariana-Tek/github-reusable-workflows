@@ -47,14 +47,23 @@ jobs:
       - name: Retag image
         run: |
           set -x
-            
+
           MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} \
             --query 'images[].imageManifest' --output text)
           [ $? -ne 0 ] && exit 1
-
+          
+          
+          #Split tag input
+          TAGS=""
+          for tag in $(echo ${{ inputs.image_tag }} | tr ',' ' ')
+          do
+          	TAGS="$TAGS --image-tag $tag"
+          done
+          
           status=0
-          OUTPUT=$(aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-tag ${{ inputs.image_tag }} \
-            --image-manifest "${MANIFEST}" 2>&1 || status=$?)
+
+          OUTPUT=$(aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} $TAGS \
+          --image-manifest "${MANIFEST}" 2>&1 || status=$?)
           if [ $status -ne 0 ]
           then
              if echo $OUTPUT | grep "ImageAlreadyExistsException"
