@@ -25,7 +25,7 @@ on:
       region: # AWS region where ECR is located
         required: false
         type: string
-        default: ${{ secrets.AWS_REGION }}
+        default: us-west-2
 
 # permission can be added at job level or workflow level
 permissions:
