@@ -20,12 +20,14 @@ on:
       dry_run:
         type: boolean
         default: false
+    secrets:
+      NPM_TOKEN:
+        required: false
 
 env:
   DOCKER_BUILDKIT: 1
   ECR_REPOSITORY: ${{ secrets.AWS_RESOURCE_NAME_PREFIX }}
   IMAGE_TAG: ${{ github.sha }}
-  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
 # permission can be added at job level or workflow level
 permissions:
