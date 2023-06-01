@@ -20,6 +20,9 @@ on:
       dry_run:
         type: boolean
         default: false
+    secrets:
+      NPM_TOKEN:
+        required: false
 
 env:
   DOCKER_BUILDKIT: 1
@@ -56,6 +59,7 @@ jobs:
           if [ "${{ inputs.dry_run }}" == "false" ]
           then
             docker build --build-arg VERSION=${{ github.sha }} \
+              --build-arg NPM_TOKEN=${{ secrets.NPM_TOKEN }} \
               -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
               -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ inputs.tag_name }} \
               ${{ inputs.extra_build_args }} .
