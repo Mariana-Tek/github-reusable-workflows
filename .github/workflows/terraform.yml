@@ -1,0 +1,119 @@
+name: Terraform
+
+# Runs Terraform in a preview mode when a PR is opened and
+# the changes are applied when it's merged into production.
+# https://learn.hashicorp.com/tutorials/terraform/github-actions
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: true
+        type: string
+      environment_name:
+        description: "Name of the environment"
+        type: string
+        required: false
+        default: "d"
+      region_name:
+        description: "Name of AWS region where the application will be deployed"
+        type: string
+        required: false
+        default: "us-west-2"
+      aws_remote_role_arn:
+        description: AWS IAM role to access the Terraform remote state
+        type: string
+        required: false
+        default: "arn:aws:iam::424765940475:role/p-bt-github-terraform-state-role"
+
+# permission can be added at job level or workflow level
+permissions:
+  id-token: write
+  contents: write # This is required for actions/checkout
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.repository }}-terraform # ensure only one instance is run
+
+env:
+  TF_VAR_remote_state_role_arn: ${{ inputs.aws_remote_role_arn }}
+  ENVIRONMENT: ${{ inputs.environment_name }}
+  REGION: ${{ inputs.region_name }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Clean workspace folder
+        run: |
+          rm -rf .terraform || true
+
+      - name: Set variables
+        run: |
+          TERRAFORM_VERSION=$(cat ${{ github.workspace }}/.terraform-version)
+          echo "TERRAFORM_VERSION=$TERRAFORM_VERSION" >> $GITHUB_ENV
+          if [[ -f "config/${{ env.REGION }}-${{ env.ENVIRONMENT }}-ci.tfvars" ]]; then
+            echo "CI_VAR_FILE=config/${{ env.REGION }}-${{ env.ENVIRONMENT }}-ci.tfvars" >> $GITHUB_ENV
+          elif [[ -f "config/${{ env.ENVIRONMENT }}-ci.tfvars" ]]; then
+            echo "CI_VAR_FILE=config/${{ env.ENVIRONMENT }}-ci.tfvars" >> $GITHUB_ENV
+          elif [[ -f "config/general-ci.tfvars" ]]; then
+            # Used only in the prerequisites
+            echo "CI_VAR_FILE=config/general-ci.tfvars" >> $GITHUB_ENV
+          else
+            echo "ERROR: The configuration file for Github Actions is missing!"
+            exit 1
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: ${{ env.REGION }}
+          role-to-assume: ${{ secrets.OIDC_ROLE_ARN }}
+          role-session-name: terraform
+
+      - name: Terraform Init
+        id: init
+        run: |
+          make setup
+        env:
+          INIT_OPTS: -backend-config="role_arn=${{ env.TF_VAR_remote_state_role_arn }}"
+          GIT_SSH_COMMAND:
+            "echo '${{ secrets.ACTIONS_SSH_PRIVATE_KEY }}' > id_rsa
+            && ssh-keyscan github.com > known_hosts
+            && chmod 600 id_rsa known_hosts
+            && ssh -i ./id_rsa -o UserKnownHostsFile=./known_hosts"
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          make plan
+        continue-on-error: true
+        env:
+          PLAN_OPTS: -no-color -var-file=${{ env.CI_VAR_FILE }}
+
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: make apply
