@@ -47,34 +47,40 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment_name }} # The github settings for the environment defined if approvals are needed
+    uses: Mariana-Tek/github-reusable-workflows/.github/workflows/retag_image.yml@main
+    with:
+      commit_id: ${{ inputs.commit_id }}
+      image_tag: ${{ inputs.image_tag }}
+    secrets: inherit
 
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-region: ${{ secrets.AWS_REGION }}
-          role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
-          role-session-name: OIDCSession
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+   # steps:
+   #   - name: Configure AWS credentials
+   #     uses: aws-actions/configure-aws-credentials@v2
+   #     with:
+   #       aws-region: ${{ secrets.AWS_REGION }}
+   #       role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
+   #       role-session-name: OIDCSession
 
-      - name: Retag image
-        run: |
-          if [ "${{ inputs.dry_run }}" == "false" ]
-          then
-            MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} --query 'images[].imageManifest' --output text)
-            if ! aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-tag ${{ inputs.image_tag }} --image-manifest "${MANIFEST}"
-            then
-              if aws ecr list-images --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --query 'imageIds[?imageTag==`'${{ inputs.commit_id }}'`]' --output text
-              then
-                echo "image already deployed."
-              else
-                echo "image not deployed"
-                exit 1
-              fi
-            fi
-          else
-            echo "DRYRUN: Run commands to add tags to an image"
-          fi
+   #   - name: Login to Amazon ECR
+   #     id: login-ecr
+   #     uses: aws-actions/amazon-ecr-login@v1
+
+   #   - name: Retag image
+   #     run: |
+   #       if [ "${{ inputs.dry_run }}" == "false" ]
+   #       then
+   #         MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} --query 'images[].imageManifest' --output text)
+   #         if ! aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-tag ${{ inputs.image_tag }} --image-manifest "${MANIFEST}"
+   #         then
+   #           if aws ecr list-images --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --query 'imageIds[?imageTag==`'${{ inputs.commit_id }}'`]' --output text
+   #           then
+   #             echo "image already deployed."
+   #           else
+   #             echo "image not deployed"
+   #             exit 1
+   #           fi
+   #         fi
+   #       else
+   #         echo "DRYRUN: Run commands to add tags to an image"
+   #       fi
