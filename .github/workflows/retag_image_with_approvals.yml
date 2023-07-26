@@ -47,8 +47,14 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment_name }} # The github settings for the environment defined if approvals are needed
-    uses: Mariana-Tek/github-reusable-workflows/.github/workflows/retag_image.yml@main
-    secrets: inherit
+
+    steps:
+      - name: Retag Image
+        uses: Mariana-Tek/github-reusable-workflows/.github/workflows/retag_image.yml@main
+        with:
+          commit_id: ${{ inputs.commit_id }}
+          image_tag: ${{ inputs.image_tag }}
+        secrets: inherit
 
 
    # steps:
