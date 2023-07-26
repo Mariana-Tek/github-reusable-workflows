@@ -56,25 +56,23 @@ jobs:
             --query 'images[].imageManifest' --output text)
           [ $? -ne 0 ] && exit 1
 
-          #Split tag input
-          TAGS=""
-          for tag in $(echo ${{ inputs.image_tag }} | tr ',' ' ')
-          do
-          	TAGS="$TAGS --image-tag $tag"
-          done
-
-          status=0
-          OUTPUT=$(aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} $TAGS \
-          --image-manifest "${MANIFEST}" 2>&1 || status=$?)
-          if [ $status -ne 0 ]
-          then
-             if echo $OUTPUT | grep "ImageAlreadyExistsException"
-             then
-                echo "Image has already been deploy"
-                exit 0
+            #Split tag input
+            TAGS=""
+            for tag in $(echo ${{ inputs.image_tag }} | tr ',' ' ')
+            do
+              status=0
+              OUTPUT=$(aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-tag $tag \
+              --image-manifest "${MANIFEST}" 2>&1 || status=$?)
+              if [ $status -ne 0 ]
+              then
+                 if echo $OUTPUT | grep "ImageAlreadyExistsException"
+                 then
+                    echo "Image has already been deploy"
+                    exit 0
+                  fi
+                  exit $status
               fi
-              exit $status
-          fi
+            done
 
         env:
           AWS_PAGER: ""
