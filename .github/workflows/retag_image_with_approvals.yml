@@ -49,41 +49,66 @@ jobs:
       name: ${{ inputs.environment_name }} # The github settings for the environment defined if approvals are needed
 
     steps:
-      - name: Retag Image
-        uses: Mariana-Tek/github-reusable-workflows/.github/workflows/retag_image.yml@main
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          commit_id: ${{ inputs.commit_id }}
-          image_tag: ${{ inputs.image_tag }}
-        secrets: inherit
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
+          role-session-name: OIDCSession
 
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
-   # steps:
-   #   - name: Configure AWS credentials
-   #     uses: aws-actions/configure-aws-credentials@v2
-   #     with:
-   #       aws-region: ${{ secrets.AWS_REGION }}
-   #       role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
-   #       role-session-name: OIDCSession
+     # - name: Retag image
+     #   run: |
+     #     if [ "${{ inputs.dry_run }}" == "false" ]
+     #     then
+     #       MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} --query 'images[].imageManifest' --output text)
+     #       if ! aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-tag ${{ inputs.image_tag }} --image-manifest "${MANIFEST}"
+     #       then
+     #         if aws ecr list-images --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --query 'imageIds[?imageTag==`'${{ inputs.commit_id }}'`]' --output text
+     #         then
+     #           echo "image already deployed."
+     #         else
+     #           echo "image not deployed"
+     #           exit 1
+     #         fi
+     #       fi
+     #     else
+     #       echo "DRYRUN: Run commands to add tags to an image"
+     #     fi
 
-   #   - name: Login to Amazon ECR
-   #     id: login-ecr
-   #     uses: aws-actions/amazon-ecr-login@v1
+      - name: Retag image
+        run: |
+          if [ "${{ inputs.dry_run }}" == "false" ]
+          then
+            set -x
 
-   #   - name: Retag image
-   #     run: |
-   #       if [ "${{ inputs.dry_run }}" == "false" ]
-   #       then
-   #         MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} --query 'images[].imageManifest' --output text)
-   #         if ! aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-tag ${{ inputs.image_tag }} --image-manifest "${MANIFEST}"
-   #         then
-   #           if aws ecr list-images --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --query 'imageIds[?imageTag==`'${{ inputs.commit_id }}'`]' --output text
-   #           then
-   #             echo "image already deployed."
-   #           else
-   #             echo "image not deployed"
-   #             exit 1
-   #           fi
-   #         fi
-   #       else
-   #         echo "DRYRUN: Run commands to add tags to an image"
-   #       fi
+            MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} \
+              --query 'images[].imageManifest' --output text)
+            [ $? -ne 0 ] && exit 1
+
+            #Split tag input
+            TAGS=""
+            for tag in $(echo ${{ inputs.image_tag }} | tr ',' ' ')
+            do
+                  TAGS="$TAGS --image-tag $tag"
+            done
+
+            status=0
+            OUTPUT=$(aws ecr put-image --repository-name ${{ secrets.AWS_RESOURCE_NAME_PREFIX }} $TAGS \
+            --image-manifest "${MANIFEST}" 2>&1 || status=$?)
+            if [ $status -ne 0 ]
+            then
+               if echo $OUTPUT | grep "ImageAlreadyExistsException"
+               then
+                  echo "Image has already been deploy"
+                  exit 0
+                fi
+                exit $status
+            fi
+          else
+            echo "DRYRUN: Run commands to add tags to an image"
+          fi
+
