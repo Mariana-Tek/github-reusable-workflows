@@ -34,7 +34,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: ${{ github.repository }}-terraform # ensure only one instance is run
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }} 
 
 env:
   TF_VAR_remote_state_role_arn: ${{ inputs.aws_remote_role_arn }}
