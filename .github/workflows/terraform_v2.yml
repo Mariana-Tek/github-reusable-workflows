@@ -10,21 +10,20 @@ on:
       working-directory:
         required: true
         type: string
-      environment_name:
-        description: "Name of the environment"
+      config:
+        description: "key value pair separated by a semi-colon"
         type: string
-        required: false
-        default: "d"
-      region_name:
-        description: "Name of AWS region where the application will be deployed"
-        type: string
-        required: false
-        default: "us-west-2"
+        required: true
       aws_remote_role_arn:
         description: AWS IAM role to access the Terraform remote state
         type: string
         required: false
         default: "arn:aws:iam::424765940475:role/p-bt-github-terraform-state-role"
+      separator:
+        description: "character using to separate the elements of the CI confguration file"
+        type: string
+        required: false
+        default: "_"
 
 # permission can be added at job level or workflow level
 permissions:
@@ -34,12 +33,10 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
 
 env:
-  TF_VAR_remote_state_role_arn: ${{ inputs.aws_remote_role_arn }}
-  ENVIRONMENT: ${{ inputs.environment_name }}
-  REGION: ${{ inputs.region_name }}
+  TF_VAR_remote_state_role_arn: ${{ inputs.aws_remote_role_arn }} # Terraform uses this
 
 defaults:
   run:
@@ -58,25 +55,32 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
-      - name: Clean workspace folder
+      - name: Select installation to manage
         run: |
-          rm -rf .terraform || true
+          for pair in $(echo "${{ inputs.config }}" | tr ';' ' ')
+          do
+                  echo $pair >> $GITHUB_ENV
+          done
 
-      - name: Set variables
+      - name: Select CI configuration file
         run: |
-          TERRAFORM_VERSION=$(cat ${{ github.workspace }}/.terraform-version)
-          echo "TERRAFORM_VERSION=$TERRAFORM_VERSION" >> $GITHUB_ENV
-          if [[ -f "config/${{ env.REGION }}-${{ env.ENVIRONMENT }}-ci.tfvars" ]]; then
-            echo "CI_VAR_FILE=config/${{ env.REGION }}-${{ env.ENVIRONMENT }}-ci.tfvars" >> $GITHUB_ENV
-          elif [[ -f "config/${{ env.ENVIRONMENT }}-ci.tfvars" ]]; then
-            echo "CI_VAR_FILE=config/${{ env.ENVIRONMENT }}-ci.tfvars" >> $GITHUB_ENV
-          elif [[ -f "config/general-ci.tfvars" ]]; then
+          # Find the file to configuration file when Terraform run as a Github Action
+          if [[ -f "config/${{ env.REGION }}${{ inputs.separator }}${{ env.ENVIRONMENT }}${{ inputs.separator }}ci.tfvars" ]]; then
+            echo "CI_VAR_FILE=config/${{ env.REGION }}${{ inputs.separator }}${{ env.ENVIRONMENT }}${{ inputs.separator }}ci.tfvars" >> $GITHUB_ENV
+          elif [[ -f "config/${{ env.ENVIRONMENT }}${{ inputs.separator }}ci.tfvars" ]]; then
+            echo "CI_VAR_FILE=config/${{ env.ENVIRONMENT }}${{ inputs.separator }}ci.tfvars" >> $GITHUB_ENV
+          elif [[ -f "config/general${{ inputs.separator }}ci.tfvars" ]]; then
             # Used only in the prerequisites
-            echo "CI_VAR_FILE=config/general-ci.tfvars" >> $GITHUB_ENV
+            echo "CI_VAR_FILE=config/general${{ inputs.separator }}ci.tfvars" >> $GITHUB_ENV
           else
             echo "ERROR: The configuration file for Github Actions is missing!"
             exit 1
           fi
+
+      - name: Set Terraform version
+        run: |
+          TERRAFORM_VERSION=$(cat ${{ github.workspace }}/.terraform-version)
+          echo "TERRAFORM_VERSION=$TERRAFORM_VERSION" >> $GITHUB_ENV
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
@@ -106,13 +110,8 @@ jobs:
         id: plan
         run: |
           make plan
-        continue-on-error: true
         env:
           PLAN_OPTS: -no-color -var-file=${{ env.CI_VAR_FILE }}
-
-      - name: Terraform Plan Status
-        if: steps.plan.outcome == 'failure'
-        run: exit 1
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
