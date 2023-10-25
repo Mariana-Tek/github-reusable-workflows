@@ -22,6 +22,12 @@ on:
       image_tag: # Tag to add to the container image
         required: true
         type: string
+      region: # AWS region where ECR is located
+        required: false
+        type: string
+
+env:
+  AWS_REGION: ${{ inputs.region }} || ${{ secrets.AWS_REGION }}
 
 # permission can be added at job level or workflow level
 permissions:
@@ -36,7 +42,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: $AWS_REGION
           role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
           role-session-name: OIDCSession
 
