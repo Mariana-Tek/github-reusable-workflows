@@ -26,9 +26,6 @@ on:
         required: false
         type: string
 
-env:
-  AWS_REGION: ${{ inputs.region }} || ${{ secrets.AWS_REGION }}
-
 # permission can be added at job level or workflow level
 permissions:
   id-token: write # Required to get the ID Token that will be used for OIDC
@@ -39,6 +36,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Set Region Environment
+        run: |
+          AWS_REGION=""
+          if [ -z "${{ inputs.region }}" ]
+          then
+                AWS_REGION=${{ secrets.AWS_REGION }} 
+          else
+                AWS_REGION=${{ inputs.region }}
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
