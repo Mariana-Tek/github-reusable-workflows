@@ -4,14 +4,21 @@ on:
   workflow_call:
     inputs:
       region: # AWS region where pipeline is located
-        required: false
+        required: true
         type: string
+        default: 'us-west-2'
       pipeline_name: # Name of the pipeline to check
         required: true
         type: string
+        default: 'us-west-2-t-bt-mtjngo-pool1-orchestration'
       stage_name: # Name of the stage to check
         required: true
         type: string
+        default: 't'
+      is_test: # Whether this is a test run
+        required: false
+        type: boolean
+        default: false
 
 # permission can be added at job level or workflow level
 permissions:
@@ -26,8 +33,10 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          aws-region: ${{ inputs.region }}
-          role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
+          # aws-region: ${{ inputs.region }}
+          aws-region: us-west-2
+          # role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::975162168600:role/github-oidc-Mariana-Tek-mariana-django-infra
           role-session-name: OIDCSession
       
       - name: Check pipeline status
@@ -35,12 +44,12 @@ jobs:
           set -x
 
           while true; do
-            STATUS=$(aws codepipeline get-pipeline-state --name ${{ inputs.pipeline_name }} --query 'stageStates[?stageName==${{ inputs.stage_name }} ].latestExecution.status' --output text)
+            STATUS=$(aws codepipeline get-pipeline-state --name ${{ inputs.pipeline_name }} --query "stageStates[?stageName=='${{ inputs.stage_name }}' ].latestExecution.status" --output text)
             [ $? -ne 0 ] && exit 1
 
             if [ "$STATUS" == "InProgress" ]; then
               echo "Pipeline is still in progress"
-              sleep 10
+              sleep 30
             elif [ "$STATUS" == "Succeeded" ]; then
               echo "Pipeline succeeded"
               exit 0
