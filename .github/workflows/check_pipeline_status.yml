@@ -15,10 +15,6 @@ on:
         required: true
         type: string
         default: 't'
-      is_test: # Whether this is a test run
-        required: false
-        type: boolean
-        default: false
 
 # permission can be added at job level or workflow level
 permissions:
