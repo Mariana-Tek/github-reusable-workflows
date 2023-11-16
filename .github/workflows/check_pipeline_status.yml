@@ -6,15 +6,12 @@ on:
       region: # AWS region where pipeline is located
         required: true
         type: string
-        default: 'us-west-2'
       pipeline_name: # Name of the pipeline to check
         required: true
         type: string
-        default: 'us-west-2-t-bt-mtjngo-pool1-orchestration'
       stage_name: # Name of the stage to check
         required: true
         type: string
-        default: 't'
 
 # permission can be added at job level or workflow level
 permissions:
