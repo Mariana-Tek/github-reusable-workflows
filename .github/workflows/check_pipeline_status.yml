@@ -33,10 +33,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          # aws-region: ${{ inputs.region }}
-          aws-region: us-west-2
-          # role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
-          role-to-assume: arn:aws:iam::975162168600:role/github-oidc-Mariana-Tek-mariana-django-infra
+          aws-region: ${{ inputs.region }}
+          role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
           role-session-name: OIDCSession
       
       - name: Check pipeline status
