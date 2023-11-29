@@ -43,14 +43,14 @@ jobs:
         
             retry_counter=0
 
-            while  [ $retry_attempts -lt $retry_count ] ; do
+            while  [ ${{ inputs.retry_attempts }} -lt $retry_count ] ; do
 
-            if [ $retry_attempts -ge $retry_count ]; then
+            if [ ${{ inputs.retry_attempts }} -ge $retry_count ]; then
               echo "Pipeline failed after multiple retries"
               exit 1
             fi
 
-            STATUS=$(aws codepipeline get-pipeline-state --name $pipeline_name --query "stageStates[?stageName=='$stage_name' ].latestExecution.status" --output text)
+            STATUS=$(aws codepipeline get-pipeline-state --name ${{ inputs.pipeline_name }} --query "stageStates[?stageName=='${{ inputs.stage_name }}'' ].latestExecution.status" --output text)
             [ $? -ne 0 ] && exit 1 && echo "Error getting pipeline status"
 
             if [ "$STATUS" == "InProgress" ]; then
@@ -61,7 +61,7 @@ jobs:
               exit 0
             else
               retry_attempts=$[$retry_attempts+1]
-              echo "Pipeline is reporting status $STATUS - retrying $retry_attempts of $retry_count"
-              sleep $retry_interval
+              echo "Pipeline is reporting status $STATUS - retrying $retry_count of ${{ inputs.retry_attempts }}."
+              sleep ${{ inputs.retry_interval }}
             fi
           done    
