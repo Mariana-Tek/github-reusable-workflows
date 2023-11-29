@@ -12,6 +12,14 @@ on:
       stage_name: # Name of the stage to check
         required: true
         type: string
+      retry_attempts: # Number of seconds to wait between retries
+        required: true
+        type: number
+        default: 30
+      retry_interval: # Number of seconds to wait between retries
+        required: true
+        type: number
+        default: 30
 
 # permission can be added at job level or workflow level
 permissions:
@@ -24,7 +32,7 @@ jobs:
 
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ secrets.region }}
           role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
@@ -33,9 +41,17 @@ jobs:
       - name: Check pipeline status
         run: |
         
-          while true; do
-            STATUS=$(aws codepipeline get-pipeline-state --name ${{ inputs.pipeline_name }} --query "stageStates[?stageName=='${{ inputs.stage_name }}' ].latestExecution.status" --output text)
-            [ $? -ne 0 ] && exit 1
+            retry_counter=0
+
+            while  [ $retry_attempts -lt $retry_count ] ; do
+
+            if [ $retry_attempts -ge $retry_count ]; then
+              echo "Pipeline failed after multiple retries"
+              exit 1
+            fi
+
+            STATUS=$(aws codepipeline get-pipeline-state --name $pipeline_name --query "stageStates[?stageName=='$stage_name' ].latestExecution.status" --output text)
+            [ $? -ne 0 ] && exit 1 && echo "Error getting pipeline status"
 
             if [ "$STATUS" == "InProgress" ]; then
               echo "Pipeline is still in progress"
@@ -44,7 +60,8 @@ jobs:
               echo "Pipeline succeeded"
               exit 0
             else
-              echo "Pipeline failed"
-              exit 1
+              retry_attempts=$[$retry_attempts+1]
+              echo "Pipeline is reporting status $STATUS - retrying $retry_attempts of $retry_count"
+              sleep $retry_interval
             fi
-          done      
+          done    
