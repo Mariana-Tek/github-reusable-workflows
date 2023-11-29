@@ -43,9 +43,9 @@ jobs:
         
             retry_counter=0
 
-            while  [ ${{ inputs.retry_attempts }} -lt $retry_count ] ; do
+            while  [ ${{ inputs.retry_attempts }} -lt $retry_counter ] ; do
 
-            if [ ${{ inputs.retry_attempts }} -ge $retry_count ]; then
+            if [ ${{ inputs.retry_attempts }} -ge $retry_counter ]; then
               echo "Pipeline failed after multiple retries"
               exit 1
             fi
