@@ -50,7 +50,7 @@ jobs:
               exit 1
             fi
 
-            STATUS=$(aws codepipeline get-pipeline-state --name ${{ inputs.pipeline_name }} --query "stageStates[?stageName=='${{ inputs.stage_name }}'' ].latestExecution.status" --output text)
+            STATUS=$(aws codepipeline get-pipeline-state --name ${{ inputs.pipeline_name }} --query "stageStates[?stageName=='${{ inputs.stage_name }}' ].latestExecution.status" --output text)
             [ $? -ne 0 ] && exit 1 && echo "Error getting pipeline status"
 
             if [ "$STATUS" == "InProgress" ]; then
