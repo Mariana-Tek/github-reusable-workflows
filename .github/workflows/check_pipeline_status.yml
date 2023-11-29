@@ -64,4 +64,4 @@ jobs:
               echo "Pipeline is reporting status $STATUS - retrying $retry_count of ${{ inputs.retry_attempts }}."
               sleep ${{ inputs.retry_interval }}
             fi
-          done    
+            done    
