@@ -43,9 +43,9 @@ jobs:
         
             retry_counter=0
 
-            while  [ ${{ inputs.retry_attempts }} -lt $retry_counter ] ; do
+            while [ $retry_counter -lt ${{ inputs.retry_attempts }}  ] ; do
 
-            if [ ${{ inputs.retry_attempts }} -ge $retry_counter ]; then
+            if [ $retry_counter -ge ${{ inputs.retry_attempts }} ]; then
               echo "Pipeline failed after multiple retries"
               exit 1
             fi
@@ -60,8 +60,8 @@ jobs:
               echo "Pipeline succeeded"
               exit 0
             else
-              retry_attempts=$[$retry_attempts+1]
-              echo "Pipeline is reporting status $STATUS - retrying $retry_count of ${{ inputs.retry_attempts }}."
+              retry_counter=$[$retry_counter+1]
+              echo "Pipeline is reporting status $STATUS - retrying $retry_counter of ${{ inputs.retry_attempts }}."
               sleep ${{ inputs.retry_interval }}
             fi
             done    
