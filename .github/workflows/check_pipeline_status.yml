@@ -26,14 +26,13 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          aws-region: ${{ inputs.region }}
+          aws-region: ${{ secrets.region }}
           role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
           role-session-name: OIDCSession
       
       - name: Check pipeline status
         run: |
-          set -x
-
+        
           while true; do
             STATUS=$(aws codepipeline get-pipeline-state --name ${{ inputs.pipeline_name }} --query "stageStates[?stageName=='${{ inputs.stage_name }}' ].latestExecution.status" --output text)
             [ $? -ne 0 ] && exit 1
