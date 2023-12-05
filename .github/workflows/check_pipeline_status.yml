@@ -1,0 +1,67 @@
+name: Check Pipeline Status
+
+on:
+  workflow_call:
+    inputs:
+      region: # AWS region where pipeline is located
+        required: true
+        type: string
+      pipeline_name: # Name of the pipeline to check
+        required: true
+        type: string
+      stage_name: # Name of the stage to check
+        required: true
+        type: string
+      retry_attempts: # Number of seconds to wait between retries
+        required: true
+        type: number
+        default: 30
+      retry_interval: # Number of seconds to wait between retries
+        required: true
+        type: number
+        default: 30
+
+# permission can be added at job level or workflow level
+permissions:
+  id-token: write # Required to get the ID Token that will be used for OIDC
+  contents: read # Required for actions/checkout
+
+jobs:
+  check_pipeline_status:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
+          role-session-name: OIDCSession
+      
+      - name: Check pipeline status
+        run: |
+        
+            retry_counter=0
+
+            while [ $retry_counter -lt ${{ inputs.retry_attempts }}  ] ; do
+
+              STATUS=$(aws codepipeline get-pipeline-state --name ${{ inputs.pipeline_name }} --query "stageStates[?stageName=='${{ inputs.stage_name }}' ].latestExecution.status" --output text)
+              [ $? -ne 0 ] && exit 1 && echo "Error getting pipeline status"
+
+              if [ "$STATUS" == "InProgress" ]; then
+                echo "Pipeline is still in progress"
+              elif [ "$STATUS" == "Succeeded" ]; then
+                echo "Pipeline succeeded"
+                exit 0
+              else
+                retry_counter=$[$retry_counter+1]
+                echo "Pipeline is reporting status $STATUS - retrying $retry_counter of ${{ inputs.retry_attempts }}."
+              fi
+
+              sleep ${{ inputs.retry_interval }}
+
+            done    
+
+            echo "Pipeline failed after multiple retries"
+            exit 1
+            
