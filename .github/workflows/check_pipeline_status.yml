@@ -39,6 +39,7 @@ jobs:
           role-session-name: OIDCSession
       
       - name: Check pipeline status
+        timeout-minutes: 120
         run: |
         
             retry_counter=0
