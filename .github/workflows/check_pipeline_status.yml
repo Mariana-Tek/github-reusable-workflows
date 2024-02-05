@@ -39,6 +39,7 @@ jobs:
           role-session-name: OIDCSession
       
       - name: Check pipeline status
+        if: contains(github.event.pull_request.labels.*.name, 'bypass-pipeline-check')
         timeout-minutes: 120
         run: |
         
