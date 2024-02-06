@@ -31,11 +31,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check labels
-        run: |
-          echo "Labels: ${{ github.event.pull_request.labels.*.name }}"
-          echo "Bypass pipeline check: ${{ contains(github.event.pull_request.labels.*.name, 'bypass-pipeline-check') }}"
-
+      
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -44,7 +40,7 @@ jobs:
           role-session-name: OIDCSession
       
       - name: Check pipeline status
-        if: contains(github.event.pull_request.labels.*.name, 'bypass-pipeline-check') == false
+        if: contains(toJson(github.event.pull_request.labels.*.name), 'bypass-pipeline-check') == false
         timeout-minutes: 120
         run: |
         
