@@ -31,6 +31,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      - name: List labels on pull request
+        run: |
+          echo "Labels on pull request: ${{ toJson(github.event.pull_request.labels) }}"
       
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
