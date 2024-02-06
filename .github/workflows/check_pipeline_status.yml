@@ -39,7 +39,7 @@ jobs:
           role-session-name: OIDCSession
       
       - name: Check pipeline status
-        if: contains(github.event.pull_request.labels.*.name, 'bypass-pipeline-check')
+        if: contains(github.event.pull_request.labels.*.name, 'bypass-pipeline-check') == false
         timeout-minutes: 120
         run: |
         
@@ -66,4 +66,3 @@ jobs:
 
             echo "Pipeline failed after multiple retries"
             exit 1
-            
