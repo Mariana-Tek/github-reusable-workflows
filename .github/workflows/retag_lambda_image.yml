@@ -1,0 +1,80 @@
+name: retag image
+
+# Triggers the deploy (Codepipeline) pipeline when a container
+# image is updated.  This results in an event to be emitted and
+# Codepipeline is configured to listen to ECR events and will
+# start when the event contains its image tag.   There is one
+# image tag per environment.
+
+# For this to work, the following 'secrets' must be added to this github repository:
+#
+# * AWS_REGION -- The region where the ECR repository resides
+# * AWS_ECR_ACCOUNT_URL --
+# * AWS_LAMBDA_RESOURCE_NAME_PREFIX --
+# * BUILD_AWS_IAM_ROLE_ARN -- Github OIDC Connect enabled IAM role (https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services)
+
+on:
+  workflow_call:
+    inputs:
+      commit_id: # This may be the git tag, commit id or branch name.
+        required: true
+        type: string
+      image_tag: # Tag to add to the container image
+        required: true
+        type: string
+      region: # AWS region where ECR is located
+        required: false
+        type: string
+        default: us-west-2
+
+# permission can be added at job level or workflow level
+permissions:
+  id-token: write # Required to get the ID Token that will be used for OIDC
+  contents: read # Required for actions/checkout
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ inputs.region }}
+          role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
+          role-session-name: OIDCSession
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Retag image
+        run: |
+          set -x
+
+          MANIFEST=$(aws ecr batch-get-image --repository-name ${{ secrets.AWS_LAMBDA_RESOURCE_NAME_PREFIX }} --image-ids imageTag=${{ inputs.commit_id }} \
+            --query 'images[].imageManifest' --output text)
+          [ $? -ne 0 ] && exit 1
+
+          #Split tag input
+          TAGS=""
+          for tag in $(echo ${{ inputs.image_tag }} | tr ',' ' ')
+          do
+          	TAGS="$TAGS --image-tag $tag"
+          done
+
+          status=0
+          OUTPUT=$(aws ecr put-image --repository-name ${{ secrets.AWS_LAMBDA_RESOURCE_NAME_PREFIX }} $TAGS \
+          --image-manifest "${MANIFEST}" 2>&1 || status=$?)
+          if [ $status -ne 0 ]
+          then
+             if echo $OUTPUT | grep "ImageAlreadyExistsException"
+             then
+                echo "Image has already been deploy"
+                exit 0
+              fi
+              exit $status
+          fi
+
+        env:
+          AWS_PAGER: ""
