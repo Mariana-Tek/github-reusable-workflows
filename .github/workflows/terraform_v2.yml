@@ -24,6 +24,11 @@ on:
         type: string
         required: false
         default: "_"
+      tfvarfile_override:
+        description: "Used to specify a config that isn't found in convential means. Used for scheduled runs."
+        type: string
+        required: false
+        default: ""
 
 # permission can be added at job level or workflow level
 permissions:
@@ -112,6 +117,7 @@ jobs:
           make plan
         env:
           PLAN_OPTS: -no-color -var-file=${{ env.CI_VAR_FILE }}
+          TFVARFILE_OVERRIDE: ${{ inputs.tfvarfile_override }}
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
