@@ -104,7 +104,7 @@ jobs:
         run: |
           make setup
         env:
-          INIT_OPTS: -backend-config="role_arn=${{ env.TF_VAR_remote_state_role_arn }}"
+          INIT_OPTS: -backend-config="assume_role={role_arn=\"${{ env.TF_VAR_remote_state_role_arn }}\"}"
           GIT_SSH_COMMAND:
             "echo '${{ secrets.ACTIONS_SSH_PRIVATE_KEY }}' > id_rsa
             && ssh-keyscan github.com > known_hosts
