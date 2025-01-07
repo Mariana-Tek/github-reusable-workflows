@@ -114,7 +114,7 @@ jobs:
         run: |
           make setup
         env:
-          INIT_OPTS: $TF_BACKEND_CONFIG
+          INIT_OPTS: ${{ env.TF_BACKEND_CONFIG }}
           GIT_SSH_COMMAND:
             "echo '${{ secrets.ACTIONS_SSH_PRIVATE_KEY }}' > id_rsa
             && ssh-keyscan github.com > known_hosts
