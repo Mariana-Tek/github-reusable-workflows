@@ -94,7 +94,7 @@ jobs:
           if (( MAJOR > 1 || (MAJOR == 1 && MINOR >= 10) )); then
             echo 'TF_BACKEND_CONFIG=-backend-config="assume_role={role_arn=\"${{ env.TF_VAR_remote_state_role_arn }}\"}"' >> $GITHUB_ENV
           else
-            echo "TF_BACKEND_CONFIG=-backend-config="role_arn=${{ env.TF_VAR_remote_state_role_arn }}"" >> $GITHUB_ENV
+            echo 'TF_BACKEND_CONFIG=-backend-config="role_arn=${{ env.TF_VAR_remote_state_role_arn }}"' >> $GITHUB_ENV
           fi
 
       - name: Setup Terraform
