@@ -87,6 +87,16 @@ jobs:
           TERRAFORM_VERSION=$(cat ${{ github.workspace }}/.terraform-version)
           echo "TERRAFORM_VERSION=$TERRAFORM_VERSION" >> $GITHUB_ENV
 
+      - name: Set Terraform Init_opts
+        run: |
+          # Extract major, minor, and patch numbers from TERRAFORM_VERSION
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${{ env.TERRAFORM_VERSION }}"
+          if (( MAJOR > 1 || (MAJOR == 1 && MINOR >= 10) )); then
+            echo 'TF_BACKEND_CONFIG=-backend-config="assume_role={role_arn=\"${{ env.TF_VAR_remote_state_role_arn }}\"}"' >> $GITHUB_ENV
+          else
+            echo 'TF_BACKEND_CONFIG=-backend-config="role_arn=${{ env.TF_VAR_remote_state_role_arn }}"' >> $GITHUB_ENV
+          fi
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -104,7 +114,7 @@ jobs:
         run: |
           make setup
         env:
-          INIT_OPTS: -backend-config="role_arn=${{ env.TF_VAR_remote_state_role_arn }}"
+          INIT_OPTS: ${{ env.TF_BACKEND_CONFIG }}
           GIT_SSH_COMMAND:
             "echo '${{ secrets.ACTIONS_SSH_PRIVATE_KEY }}' > id_rsa
             && ssh-keyscan github.com > known_hosts
