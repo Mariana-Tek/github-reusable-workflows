@@ -53,13 +53,6 @@ jobs:
       - name: Checkout calling repository
         uses: actions/checkout@v6
 
-      - name: Checkout github-reusable-workflows
-        uses: actions/checkout@v6
-        with:
-          repository: Mariana-Tek/github-reusable-workflows
-          path: reusable-workflows
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - if: ${{ ! env.PR_NUMBER  }}
         name: get PR number from commit message
         id: get-pr-number
@@ -83,7 +76,7 @@ jobs:
           fi
 
       - name: Use JSM action
-        uses: ./reusable-workflows/.github/actions/xplor-gh-jsm
+        uses: Mariana-Tek/github-reusable-workflows/.github/actions/xplor-gh-jsm@main
         id: jsm-ticket
         with:
           #
