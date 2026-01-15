@@ -50,8 +50,15 @@ jobs:
       pull-requests: read
       contents: read
     steps:
-      - name: Checkout
+      - name: Checkout calling repository
         uses: actions/checkout@v6
+
+      - name: Checkout github-reusable-workflows
+        uses: actions/checkout@v6
+        with:
+          repository: Mariana-Tek/github-reusable-workflows
+          path: reusable-workflows
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - if: ${{ ! env.PR_NUMBER  }}
         name: get PR number from commit message
@@ -75,7 +82,8 @@ jobs:
             echo "JSM operations that require a PR number may be skipped or handled differently."
           fi
 
-      - uses: ./.github/actions/xplor-gh-jsm
+      - name: Use JSM action
+        uses: ./reusable-workflows/.github/actions/xplor-gh-jsm
         id: jsm-ticket
         with:
           #
