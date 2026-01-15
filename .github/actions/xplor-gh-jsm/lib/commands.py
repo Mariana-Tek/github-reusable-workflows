@@ -2,7 +2,7 @@ from datetime import timedelta
 from time import sleep
 
 from .gh_enums import IssueStatus, IssueTransition, as_list, IssueResolution
-from .gh_utils import gh_output_env_vars, CustomPullRequest
+from .gh_utils import gh_output_env_vars, CustomPullRequest, ReleasePR
 from .utils import now_in_utc, compact_list_contains
 
 
@@ -27,17 +27,26 @@ def clone_request_by_key(jsm, template_key, pr,
     """Clone a request from a template and link it to a GitHub PR."""
 
     # description header
-    header = [f"Pull Request #{pr.number} [{pr.html_url}|{pr.html_url}]"]
+    if pr.number is not None:
+        header = [f"Pull Request #{pr.number} [{pr.html_url}|{pr.html_url}]"]
+    else:
+        # Release deployment - no PR
+        header = [f"Release Deployment [{pr.html_url}|{pr.html_url}]"]
+    
     if author_account_id:
         header.append(f"  Author: [~accountid:{author_account_id}]")
     else:
         header.append(f"  Author: {pr.user.login}")
+    
     if approvers:
         for approver in approvers:
             header.append(f"  Approved by: [~accountid:{approver}]")
     else:
         approvers_list = pr.get_approvers()
-        header.append(f"  Approved by: {approvers_list}")
+        if approvers_list:
+            header.append(f"  Approved by: {approvers_list}")
+        else:
+            header.append(f"  Approved by: Release deployment (no PR approvers)")
 
     pr_title = pr.title or None
     pr_description = pr.body or None
@@ -58,17 +67,24 @@ def clone_request_by_key(jsm, template_key, pr,
         clone.update(Planned_Start=now_in_utc())
         clone.update(Planned_End=now_in_utc(timedelta(days=5)))
 
-    # label the PR with the issue key
-    if not jsm.dry_run(f"label PR #{pr.number} with cloned key (e.g. {jsm.project_key}-1234)"):
-        pr.add_label(clone.key)
+    # label the PR with the issue key (skip for releases)
+    if pr.number is not None:
+        if not jsm.dry_run(f"label PR #{pr.number} with cloned key (e.g. {jsm.project_key}-1234)"):
+            pr.add_label(clone.key)
+    else:
+        print(f"Note: Release deployment - skipping PR labeling. Created issue: {clone.key}")
 
     status_str = IssueStatus.AWAITING_IMPLEMENTATION.value
-    if not jsm.dry_run(f"transition cloned issue to '{status_str}'", f"add label '{status_str}' to PR #{pr.number}",
-                       f"comment on PR #{pr.number} with cloned issue URL"):
+    if not jsm.dry_run(f"transition cloned issue to '{status_str}'", 
+                       f"add label '{status_str}' to PR #{pr.number if pr.number else 'release'}" if pr.number else f"transition cloned issue to '{status_str}'",
+                       f"comment on PR #{pr.number if pr.number else 'release'} with cloned issue URL" if pr.number else f"created issue URL: {issue.browser_url if 'issue' in locals() else clone.key}"):
         issue = jsm.customer_request(clone.key)
-        pr.create_issue_comment(issue.browser_url)
+        if pr.number is not None:
+            pr.create_issue_comment(issue.browser_url)
+            pr.add_label(IssueStatus.AWAITING_IMPLEMENTATION)
+        else:
+            print(f"Release deployment - Created JSM issue: {issue.browser_url}")
         issue.transition_to([IssueTransition.NORMAL_CHANGE, IssueTransition.STANDARD_CHANGE], label='cloning')
-        pr.add_label(IssueStatus.AWAITING_IMPLEMENTATION)  # issue.fields.status.name
 
 
 def move_to_deploying(issue, pr):
@@ -78,12 +94,16 @@ def move_to_deploying(issue, pr):
 
     issue.transition_to(IssueTransition.IMPLEMENT, label=IssueStatus.IMPLEMENTING)
 
-    if issue.dry_run(f"update actual_start date on {issue.key}", f"change labels on PR #{pr.number} to 'Implementing'"):
+    pr_ref = f"PR #{pr.number}" if pr.number is not None else "release"
+    if issue.dry_run(f"update actual_start date on {issue.key}", f"change labels on {pr_ref} to 'Implementing'"):
         return
 
     issue.update(Actual_Start=now_in_utc())
-    pr.remove_label(IssueStatus.AWAITING_IMPLEMENTATION)
-    pr.add_label(IssueStatus.IMPLEMENTING)
+    if pr.number is not None:
+        pr.remove_label(IssueStatus.AWAITING_IMPLEMENTATION)
+        pr.add_label(IssueStatus.IMPLEMENTING)
+    else:
+        print(f"Release deployment - skipping PR label changes for {issue.key}")
 
 
 def move_to_deployed(issue, pr, proof_data, temporary_attachment):
@@ -112,8 +132,11 @@ def move_to_deployed(issue, pr, proof_data, temporary_attachment):
         raise Exception(f"{issue.fields.status.name} cannot be moved to 'deployed' state.")
 
     issue.update(Actual_End=now_in_utc())
-    pr.remove_label(IssueStatus.IMPLEMENTING)
-    pr.add_label(IssueStatus.COMPLETED)
+    if pr.number is not None:
+        pr.remove_label(IssueStatus.IMPLEMENTING)
+        pr.add_label(IssueStatus.COMPLETED)
+    else:
+        print(f"Release deployment - skipping PR label changes for {issue.key}")
 
     # add attachment link to the Proof of Success field
     attachments = issue.fields.attachment
@@ -138,9 +161,13 @@ def move_to_canceled(issue, pr, resolution_notes):
                         # Resolution_Notes=resolution_notes,
                         )
 
-    if not issue.dry_run(f"change labels on PR #{pr.number} from {pr.issue_status} to 'Canceled'"):
-        pr.remove_label(pr.issue_status)
-        pr.add_label(IssueStatus.CANCELED)
+    pr_ref = f"PR #{pr.number}" if pr.number is not None else "release"
+    if not issue.dry_run(f"change labels on {pr_ref} from {pr.issue_status} to 'Canceled'"):
+        if pr.number is not None:
+            pr.remove_label(pr.issue_status)
+            pr.add_label(IssueStatus.CANCELED)
+        else:
+            print(f"Release deployment - skipping PR label changes for {issue.key}")
 
 
 def cancel_older_pending_requests(jsm, issue, pr, gh):

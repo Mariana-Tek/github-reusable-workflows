@@ -6,7 +6,7 @@ import requests
 from decouple import config
 
 from lib.commands import clone_request_by_key, move_to_deploying, move_to_deployed, cancel_older_pending_requests
-from lib.gh_utils import GHUtils, gh_output_env_vars
+from lib.gh_utils import GHUtils, gh_output_env_vars, ReleasePR
 from lib.jira_jsm import JiraITSM
 from lib.utils import parse_proof_of_success_url_line
 
@@ -65,11 +65,17 @@ def main(args):
 
         #
         case COMMANDS.CREATE:
-            if not args.pr_number:
-                raise Exception("PR_NUMBER is required for create-change-request command. "
-                              "This command creates a JSM change request linked to a pull request. "
-                              "When publishing a release directly (not from a PR), PR_NUMBER may not be available.")
-            pr = gh.get_pr(args.pr_number, skip_label_validation=True)
+            # For releases, PR_NUMBER may not be available - use ReleasePR instead
+            if args.pr_number:
+                pr = gh.get_pr(args.pr_number, skip_label_validation=True)
+            else:
+                # No PR number - this is likely a release deployment
+                release_tag = os.getenv('GITHUB_REF_NAME', '').replace('refs/tags/', '')
+                if not release_tag:
+                    release_tag = os.getenv('GITHUB_REF', '').replace('refs/tags/', '')
+                print(f"Creating JSM change request for release: {release_tag}")
+                pr = gh.get_release_pr(release_tag=release_tag)
+            
             jsm = jira_instance_from_ticket_prefix(args.template_key)
 
             # reporter
@@ -117,23 +123,37 @@ def main(args):
                                  approvers=approvers)
         #
         case COMMANDS.MOVE_TO_DEPLOYING:
-            if not args.pr_number:
-                raise Exception("PR_NUMBER is required for move-to-deploying command. "
-                              "This command moves a JSM issue to 'deploying' state by finding the issue via the PR's issue label. "
-                              "When publishing a release directly (not from a PR), PR_NUMBER may not be available.")
-            pr = gh.get_pr(args.pr_number)
-            jsm = jira_instance_from_ticket_prefix(pr.issue_label)
-            issue = jsm.customer_request(pr.issue_label)
+            if args.pr_number:
+                pr = gh.get_pr(args.pr_number)
+                jsm = jira_instance_from_ticket_prefix(pr.issue_label)
+                issue = jsm.customer_request(pr.issue_label)
+            else:
+                # For releases without PR, use template_key as the issue key
+                # (assuming it was set to the created issue key from CREATE step)
+                if not args.template_key:
+                    raise Exception("TEMPLATE_KEY is required for move-to-deploying when PR_NUMBER is not available. "
+                                  "For releases, provide the JSM issue key that was created for this release.")
+                jsm = jira_instance_from_ticket_prefix(args.template_key)
+                issue = jsm.customer_request(args.template_key)
+                release_tag = os.getenv('GITHUB_REF_NAME', '').replace('refs/tags/', '')
+                pr = gh.get_release_pr(release_tag=release_tag)
             move_to_deploying(issue, pr)
         #
         case COMMANDS.MOVE_TO_DEPLOYED:
-            if not args.pr_number:
-                raise Exception("PR_NUMBER is required for move-to-deployed command. "
-                              "This command moves a JSM issue to 'deployed' state by finding the issue via the PR's issue label. "
-                              "When publishing a release directly (not from a PR), PR_NUMBER may not be available.")
-            pr = gh.get_pr(args.pr_number)
-            jsm = jira_instance_from_ticket_prefix(pr.issue_label)
-            issue = jsm.customer_request(pr.issue_label)
+            if args.pr_number:
+                pr = gh.get_pr(args.pr_number)
+                jsm = jira_instance_from_ticket_prefix(pr.issue_label)
+                issue = jsm.customer_request(pr.issue_label)
+            else:
+                # For releases, we need the issue key
+                if not args.template_key:
+                    raise Exception("TEMPLATE_KEY is required for move-to-deployed when PR_NUMBER is not available. "
+                                  "For releases, provide the JSM issue key that was created for this release.")
+                jsm = jira_instance_from_ticket_prefix(args.template_key)
+                # Use template_key as the issue key for releases (assuming it was set to the created issue key)
+                issue = jsm.customer_request(args.template_key)
+                release_tag = os.getenv('GITHUB_REF_NAME', '').replace('refs/tags/', '')
+                pr = gh.get_release_pr(release_tag=release_tag)
 
             proof_data = []
 

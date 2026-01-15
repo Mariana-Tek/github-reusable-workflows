@@ -68,6 +68,39 @@ class CustomPullRequest(PullRequest):
         return self.issue_label
 
 
+class ReleasePR:
+    """
+    A minimal PR-like object for releases that don't have an associated PR.
+    This allows the JSM workflow to work with releases.
+    """
+    def __init__(self, release_tag=None, release_url=None, actor_login=None):
+        self.number = None  # No PR number for releases
+        self.html_url = release_url or os.getenv('GITHUB_SERVER_URL', '') + '/' + os.getenv('GITHUB_REPOSITORY', '') + '/releases'
+        self.user = type('obj', (object,), {'login': actor_login or os.getenv('GITHUB_ACTOR', 'unknown')})()
+        self.title = f"Release {release_tag or os.getenv('GITHUB_REF_NAME', 'unknown')}"
+        self.body = f"Release deployment for {release_tag or os.getenv('GITHUB_REF_NAME', 'unknown')}"
+        self.issue_label = None
+        self.issue_status = None
+        
+    def get_approvers(self):
+        """Releases don't have approvers"""
+        return []
+    
+    def add_label(self, label):
+        """Releases can't be labeled - this is a no-op"""
+        print(f"Note: Cannot add label '{label}' to release (no PR to label)")
+        pass
+    
+    def remove_label(self, label):
+        """Releases can't have labels removed - this is a no-op"""
+        pass
+    
+    def create_issue_comment(self, comment):
+        """Releases can't have comments - this is a no-op"""
+        print(f"Note: Cannot comment on release: {comment}")
+        pass
+
+
 class GHUtils:
     issue_label = None
 
@@ -105,3 +138,16 @@ class GHUtils:
             raise Exception(f"Pull request #{pr_number} does not have an ITSM- or ITPOC- label")
 
         return pr
+    
+    def get_release_pr(self, release_tag=None):
+        """Get a ReleasePR object for releases that don't have an associated PR"""
+        release_url = None
+        if release_tag:
+            try:
+                release = self.repo.get_release(release_tag)
+                release_url = release.html_url
+            except Exception as e:
+                if self._debug:
+                    print(f"Could not get release {release_tag}: {e}")
+        
+        return ReleasePR(release_tag=release_tag, release_url=release_url)
