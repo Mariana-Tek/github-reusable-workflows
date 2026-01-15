@@ -1,0 +1,119 @@
+# xplor-gh-jsm composite action for JSM reusable workflows
+name: 'Xplor GH JSM Toolkit'
+description: 'A Github Action to manage a JSM Standard Change Request'
+inputs:
+  GITHUB_TOKEN:
+    description: 'The GITHUB_TOKEN secret'
+    required: true
+  JSM_USER:
+    description: 'Jira/JSM user for authentication'
+    required: true
+  JSM_TOKEN:
+    description: 'Jira/JSM Token for authentication'
+    required: true
+  JSM_DRY_RUN:
+    description: |
+      Dry run mode, e.g. "true" or "false"
+      Creates nothing in Jira, just prints the actions it would take
+    default: "false"
+  COMMAND:
+    description: |
+      Command to run, e.g. "create-change-request"
+      Available commands:
+      - create-change-request
+      - move-to-deploying
+      - move-to-deployed
+    required: true
+  PR_NUMBER:
+    description: |
+      Pull request number, e.g. "123"
+      Required when creating a change request
+      It will be used to link the change request to the pull request
+    required: false
+  TEMPLATE_KEY:
+    description: |
+      Template JSM ticket, e.g. "ITSM-123"
+      Required when creating a change request
+    required: false
+  PR_ACTOR_EMAIL:
+    description: |
+      The email address of the PR actor (the user who triggered the workflow)
+      Optional, if not provided the JSM_USER will be used
+    required: false
+  PR_AUTHOR_EMAIL:
+    description: |
+      The email address of the PR author
+      Required when creating a change request
+    required: false
+  PR_APPROVER_EMAIL_LIST:
+    description: |
+      The email address(es) of the PR approver(s), one per line
+      Required when creating a change request
+    required: false
+  PROOF_URL_LIST:
+    description: |
+      A list of URLs that provide proof of the successful deployment, one per line
+      Required when moving to deployed state
+    required: false
+  GRACEFUL_EXIT:
+    description: |
+      Graceful exit mode, e.g. "true" or "false"
+      If true the action will not fail when it encounters an error
+      Instead it will print the error and exit with code 0
+    default: "true"
+outputs:
+  CREATED_ISSUE_KEY:
+    description: 'created issueKey'
+    value: ${{ steps.run-action.outputs.CREATED_ISSUE_KEY }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Dump all environment variables
+      if: ${{ inputs.JSM_DRY_RUN == 'true' }}
+      run: env | sort
+      shell: bash
+
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install pipenv
+      run: pip install pipenv
+      shell: bash
+    - name: Install dependencies
+      run: |
+        cd ${GITHUB_ACTION_PATH} || exit 1
+        pipenv install --deploy --dev
+      shell: bash
+
+    - name: Run action.py
+      env:
+        GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+        JSM_USER: ${{ inputs.JSM_USER }}
+        JSM_TOKEN: ${{ inputs.JSM_TOKEN }}
+        JSM_DRY_RUN: ${{ inputs.JSM_DRY_RUN }}
+      id: run-action
+      run: |
+        cd ${GITHUB_ACTION_PATH} || exit 1
+        args=("${{inputs.COMMAND}}")
+        [ -n "${{inputs.PR_NUMBER}}" ] && args+=("--pr-number" "${{inputs.PR_NUMBER}}")
+        [ -n "${{inputs.TEMPLATE_KEY}}" ] && args+=("--template-key" "${{inputs.TEMPLATE_KEY}}")
+        [ -n "${{inputs.PR_ACTOR_EMAIL}}" ] && args+=("--pr-actor-email" "${{inputs.PR_ACTOR_EMAIL}}")
+        [ -n "${{inputs.PR_AUTHOR_EMAIL}}" ] && args+=("--pr-author-email" "${{inputs.PR_AUTHOR_EMAIL}}")
+        while read -r url; do
+            url=$(echo "$url" | xargs)
+            url=${url//\"/}
+            [ -n "$url" ] && args+=("--pr-approver-email" "$url")
+        done <<< "${{inputs.PR_APPROVER_EMAIL_LIST}}"
+        while IFS= read -r url; do
+            url=$(echo "$url" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            [ -z "$url" ] && continue
+            args+=("--proof-url-list" "${url}")
+            done <<-EOF
+        ${{inputs.PROOF_URL_LIST}}
+        EOF
+        [ -n "${{inputs.GRACEFUL_EXIT}}" ] && args+=("--graceful-exit" "${{inputs.GRACEFUL_EXIT}}")
+        printf "Running action with args: %s\n" "${args[@]}"
+        pipenv run python action.py "${args[@]}"
+      shell: bash

@@ -1,0 +1,102 @@
+name: reusable-jsm-change-request.yml
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: false
+        type: string
+        description: "Optional environment name to access environment-level secrets"
+      COMMAND:
+        type: string
+        required: true
+      PROOF_URL_LIST:
+        type: string
+        default: ''
+      DRY_RUN:
+        type: string
+        default: 'false'
+      GRACEFUL_EXIT:
+        type: string
+        default: 'true'
+    secrets:
+      JSM_USER:
+        required: true
+      JSM_TOKEN:
+        required: true
+      JSM_TEMPLATE_KEY:
+        required: true
+    outputs:
+      CREATED_ISSUE_KEY:
+        description: 'created issueKey'
+        value: ${{ jobs.reusable-jsm-change-request.outputs.CREATED_ISSUE_KEY }}
+
+jobs:
+  get-pr-author-and-approvers-emails:
+    uses: ./.github/workflows/get-pr-author-email.yml
+    with:
+      environment: ${{ inputs.environment }}
+
+  reusable-jsm-change-request:
+    needs: get-pr-author-and-approvers-emails
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_AUTHOR_LOGIN: ${{ needs.get-pr-author-and-approvers-emails.outputs.author-login }}
+      PR_APPROVER_LOGINS: ${{ needs.get-pr-author-and-approvers-emails.outputs.approvers-logins }}
+    outputs:
+      CREATED_ISSUE_KEY: ${{ steps.jsm-ticket.outputs.CREATED_ISSUE_KEY }}
+    permissions:
+      pull-requests: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - if: ${{ ! env.PR_NUMBER  }}
+        name: get PR number from commit message
+        id: get-pr-number
+        run: |
+          PR_NUMBER=$( git log -1 --pretty=%B | grep -o '\(#[0-9]\{1,\}\)' | sed 's/[(#)]//g')
+          if [ -z "$PR_NUMBER" ]; then
+              echo "⚠️  No PR number found in commit message."
+              echo "This is expected when publishing a release directly (not from a PR merge)."
+              echo "PR_NUMBER will be empty, and JSM operations may be skipped or handled differently."
+              PR_NUMBER=""
+          fi
+          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+
+      - shell: bash
+        run: |
+          if [ -n "${{ env.PR_NUMBER }}" ]; then
+            echo "Detected PR#${{ env.PR_NUMBER }} (${{ github.event.pull_request.number }})"
+          else
+            echo "⚠️  No PR number available. This may occur when publishing a release directly."
+            echo "JSM operations that require a PR number may be skipped or handled differently."
+          fi
+
+      - uses: ./.github/actions/xplor-gh-jsm
+        id: jsm-ticket
+        with:
+          #
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          JSM_USER: ${{ secrets.JSM_USER }}
+          JSM_TOKEN: ${{ secrets.JSM_TOKEN }}
+          #
+          PR_NUMBER: ${{ env.PR_NUMBER || '' }}
+          #
+          COMMAND: ${{ inputs.COMMAND }}
+          JSM_DRY_RUN: ${{ inputs.DRY_RUN }}
+          TEMPLATE_KEY: ${{ secrets.JSM_TEMPLATE_KEY || '' }}
+          PROOF_URL_LIST: ${{ inputs.PROOF_URL_LIST || '' }}
+          GRACEFUL_EXIT: ${{ inputs.GRACEFUL_EXIT }}
+          #
+          # Note: Email addresses are not retrieved in this simplified version
+          # They would need to be provided separately if required
+          PR_ACTOR_EMAIL: ''
+          PR_AUTHOR_EMAIL: ''
+          PR_APPROVER_EMAIL_LIST: ''
+
+      - if: ${{ steps.jsm-ticket.outputs.CREATED_ISSUE_KEY != '' }}
+        name: Print the new/created issue key
+        run: echo "CREATED_ISSUE_KEY ${{ steps.jsm-ticket.outputs.CREATED_ISSUE_KEY }}"

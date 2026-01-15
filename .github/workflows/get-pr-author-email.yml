@@ -1,0 +1,102 @@
+name: Get PR Author and Approvers
+#  Simplified version that uses GITHUB_TOKEN instead of GitHub App tokens.
+#  Retrieves the GitHub login of the author of a specified pull request,
+#  as well as the GitHub logins of all approvers of that pull request.
+#
+#  Note: This version does not retrieve SAML-mapped emails (requires org admin permissions).
+#  Email addresses will need to be provided separately if required for JSM operations.
+#
+#  Inputs:
+#    - repo-name: The repository name in the format "owner/repo".
+#    - pr-number: The pull request number.
+#  Outputs:
+#    - author-login: The GitHub login of the PR author.
+#    - approvers-logins: A comma-separated list of GitHub logins of the PR approvers.
+
+on:
+  workflow_call:
+    inputs:
+      repo-name:
+        description: 'Repository name (format: owner/repo)'
+        type: string
+        default: ${{ github.repository }}
+      pr-number:
+        description: 'Pull request number'
+        type: string
+        default: ${{ github.event.pull_request.number }}
+      environment:
+        description: 'Deployment environment (e.g., production, staging)'
+        type: string
+    outputs:
+      author-login:
+        description: 'GitHub login of the PR author'
+        value: ${{ jobs.get-pr-author-and-approvers-emails.outputs.author-login }}
+      approvers-logins:
+        description: 'List of approver GitHub logins (comma-separated)'
+        value: ${{ jobs.get-pr-author-and-approvers-emails.outputs.approvers-logins }}
+
+jobs:
+  get-pr-author-and-approvers-emails:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      author-login: ${{ steps.get-pr-info.outputs.author-login }}
+      approvers-logins: ${{ steps.get-pr-info.outputs.approvers-logins }}
+    permissions:
+      pull-requests: read
+      contents: read
+    steps:
+      - id: split-repo-name
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repoName = '${{ inputs.repo-name }}';
+            const [owner, repo] = repoName.split('/');
+            if (!owner || !repo) {
+              throw new Error('Invalid repo-name format. Expected "owner/repo".');
+            }
+            core.setOutput('owner', owner);
+            core.setOutput('repo', repo);
+            core.setOutput('same-repo', repoName == "${{ github.repository }}" ? 'true' : 'false');
+
+      - id: get-pr-info
+        if: ${{ inputs.pr-number }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const repoName = '${{ inputs.repo-name }}';
+            const [owner, repo] = repoName.split('/');
+            const prNumber = parseInt('${{ inputs.pr-number }}', 10);
+            
+            try {
+              const pr = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: prNumber,
+              });
+              const author = pr.data.user.login;
+              
+              const reviews = await github.rest.pulls.listReviews({
+                owner,
+                repo,
+                pull_number: prNumber,
+              });
+              const approvers = [...new Set(
+                reviews.data
+                  .filter(review => review.state === 'APPROVED' && review.user)
+                  .map(review => review.user.login)
+              )].join(',');
+              
+              console.log(`Author: ${author}`);
+              console.log(`Approvers: ${approvers}`);
+              
+              // Set outputs
+              core.setOutput('author-login', author);
+              core.setOutput('approvers-logins', approvers);
+            } catch (error) {
+              console.log(`Warning: Could not fetch PR info: ${error.message}`);
+              console.log('This may occur when PR number is not available (e.g., release deployments)');
+              core.setOutput('author-login', '');
+              core.setOutput('approvers-logins', '');
+            }
