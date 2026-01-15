@@ -76,7 +76,7 @@ jobs:
           fi
 
       - name: Use JSM action
-        uses: Mariana-Tek/github-reusable-workflows/.github/actions/xplor-gh-jsm@main
+        uses: Mariana-Tek/github-reusable-workflows/.github/actions/xplor-gh-jsm@IN-2423-mt-jsm-automation
         id: jsm-ticket
         with:
           #
