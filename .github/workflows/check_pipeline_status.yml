@@ -12,7 +12,7 @@ on:
       stage_name: # Name of the stage to check
         required: true
         type: string
-      retry_attempts: # Number of seconds to wait between retries
+      retry_attempts: # Number of times to retry checking status
         required: true
         type: number
         default: 30
@@ -41,28 +41,35 @@ jobs:
       - name: Check pipeline status
         timeout-minutes: 120
         run: |
-        
-            retry_counter=0
+          # Only accept "Succeeded" after we've seen "InProgress" for this run.
+          # Otherwise we may be seeing the previous run's status before the new one starts.
+          seen_in_progress=0
+          retry_counter=0
 
-            while [ $retry_counter -lt ${{ inputs.retry_attempts }}  ] ; do
+          while [ $retry_counter -lt ${{ inputs.retry_attempts }} ]; do
 
-              STATUS=$(aws codepipeline get-pipeline-state --name ${{ inputs.pipeline_name }} --query "stageStates[?stageName=='${{ inputs.stage_name }}' ].latestExecution.status" --output text)
-              [ $? -ne 0 ] && exit 1 && echo "Error getting pipeline status"
+            STATUS=$(aws codepipeline get-pipeline-state --name ${{ inputs.pipeline_name }} --query "stageStates[?stageName=='${{ inputs.stage_name }}'].latestExecution.status" --output text)
+            [ $? -ne 0 ] && { echo "Error getting pipeline status"; exit 1; }
 
-              if [ "$STATUS" == "InProgress" ]; then
-                echo "Pipeline is still in progress"
-              elif [ "$STATUS" == "Succeeded" ]; then
+            if [ "$STATUS" == "InProgress" ]; then
+              seen_in_progress=1
+              echo "Pipeline is in progress (new run detected)"
+            elif [ "$STATUS" == "Succeeded" ]; then
+              if [ $seen_in_progress -eq 1 ]; then
                 echo "Pipeline succeeded"
                 exit 0
               else
-                retry_counter=$[$retry_counter+1]
-                echo "Pipeline is reporting status $STATUS - retrying $retry_counter of ${{ inputs.retry_attempts }}."
+                echo "Pipeline reports Succeeded but no new run seen yet (likely previous run) - waiting for new execution..."
               fi
+            else
+              retry_counter=$((retry_counter + 1))
+              echo "Pipeline is reporting status $STATUS - retrying $retry_counter of ${{ inputs.retry_attempts }}."
+            fi
 
-              sleep ${{ inputs.retry_interval }}
+            sleep ${{ inputs.retry_interval }}
 
-            done    
+          done
 
-            echo "Pipeline failed after multiple retries"
-            exit 1
+          echo "Pipeline failed after multiple retries"
+          exit 1
             
