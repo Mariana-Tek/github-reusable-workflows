@@ -35,13 +35,15 @@ jobs:
   build: #Build and push image to ECR
     name: Build Image
     runs-on: ubuntu-latest
+    env:
+      BUILDX_NO_DEFAULT_ATTESTATIONS: 1
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
@@ -55,7 +57,7 @@ jobs:
         run: |
           if [ "${{ inputs.dry_run }}" == "false" ]
           then
-            docker build --build-arg VERSION=${{ github.sha }} \
+            docker build --provenance=false --build-arg VERSION=${{ github.sha }} \
               -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
               -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ inputs.tag_name }} \
               ${{ inputs.extra_build_args }} .
