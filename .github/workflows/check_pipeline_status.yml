@@ -20,6 +20,11 @@ on:
         required: true
         type: number
         default: 30
+      github_environment:
+        description: GitHub Environment name to load environment-scoped secrets (e.g. production). Omit or leave empty to use repository/org secrets only.
+        required: false
+        type: string
+        default: ''
 
 # permission can be added at job level or workflow level
 permissions:
@@ -28,16 +33,16 @@ permissions:
 
 jobs:
   check_pipeline_status:
+    if: ${{ inputs.github_environment == '' }}
     runs-on: ubuntu-latest
-
-    steps:
+    steps: &check_pipeline_steps
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
           role-session-name: OIDCSession
-      
+
       - name: Check pipeline status
         timeout-minutes: 120
         run: |
@@ -72,4 +77,9 @@ jobs:
 
           echo "Pipeline failed after multiple retries"
           exit 1
-            
+
+  check_pipeline_status_with_environment:
+    if: ${{ inputs.github_environment != '' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.github_environment }}
+    steps: *check_pipeline_steps
