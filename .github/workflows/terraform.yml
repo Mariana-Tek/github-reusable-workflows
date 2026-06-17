@@ -50,8 +50,8 @@ jobs:
     name: Terraform
     runs-on: ubuntu-latest
     env:
-      # Reuse downloaded providers across runs; see Cache Terraform providers step.
-      TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
+      # Absolute path required; Terraform does not expand "~" in TF_PLUGIN_CACHE_DIR.
+      TF_PLUGIN_CACHE_DIR: ${{ env.HOME }}/.terraform.d/plugin-cache
 
     defaults:
       run:
@@ -86,10 +86,13 @@ jobs:
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
+      - name: Prepare Terraform plugin cache directory
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+
       - name: Cache Terraform providers
         uses: actions/cache@v5
         with:
-          path: ~/.terraform.d/plugin-cache
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
           key: terraform-providers-${{ runner.os }}-${{ env.TERRAFORM_VERSION }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.working-directory)) }}
           restore-keys: |
             terraform-providers-${{ runner.os }}-${{ env.TERRAFORM_VERSION }}-
