@@ -51,9 +51,6 @@ jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
-    env:
-      # Absolute path required; Terraform does not expand "~" in TF_PLUGIN_CACHE_DIR.
-      TF_PLUGIN_CACHE_DIR: ${{ env.HOME }}/.terraform.d/plugin-cache
 
     defaults:
       run:
@@ -106,7 +103,10 @@ jobs:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Prepare Terraform plugin cache directory
-        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+        run: |
+          cache_dir="$HOME/.terraform.d/plugin-cache"
+          mkdir -p "$cache_dir"
+          echo "TF_PLUGIN_CACHE_DIR=$cache_dir" >> "$GITHUB_ENV"
 
       - name: Cache Terraform providers
         uses: actions/cache@v5
