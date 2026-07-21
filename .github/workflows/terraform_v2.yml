@@ -37,8 +37,13 @@ permissions:
   issues: write
   pull-requests: write
 
+# Serialize by Terraform state (stack), not by PR/ref, so concurrent Dependabot
+# (or other) PR plans against the same state queue instead of colliding on the
+# S3 lock. cancel-in-progress must be false so queued runs wait rather than
+# cancel an in-flight plan.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: tf-state-${{ inputs.working-directory }}-${{ inputs.config }}
+  cancel-in-progress: false
 
 env:
   TF_VAR_remote_state_role_arn: ${{ inputs.aws_remote_role_arn }} # Terraform uses this
@@ -141,7 +146,7 @@ jobs:
         run: |
           make plan
         env:
-          PLAN_OPTS: -no-color -var-file=${{ env.CI_VAR_FILE }}
+          PLAN_OPTS: -no-color -lock-timeout=10m -var-file=${{ env.CI_VAR_FILE }}
           TFVARFILE_OVERRIDE: ${{ inputs.tfvarfile_override }}
 
       - name: Terraform Apply
