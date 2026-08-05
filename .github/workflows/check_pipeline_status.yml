@@ -39,7 +39,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ inputs.region }}
           role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
           role-session-name: OIDCSession
 
