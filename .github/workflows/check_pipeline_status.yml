@@ -39,9 +39,6 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          # Prefer the caller-provided region (e.g. us-west-2 preview pipelines).
-          # secrets.AWS_REGION is often the repo default (us-west-1 for Mariana-Django)
-          # and would miss pipelines that live in another region.
           aws-region: ${{ inputs.region }}
           role-to-assume: ${{ secrets.BUILD_AWS_IAM_ROLE_ARN }}
           role-session-name: OIDCSession
