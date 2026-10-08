@@ -122,6 +122,34 @@ jobs:
             terraform-providers-${{ runner.os }}-${{ env.TERRAFORM_VERSION }}-
             terraform-providers-${{ runner.os }}-
 
+      # terraform init skips a module download when .terraform/modules
+      # (including modules.json) already matches the source and version.
+      # There is no TF_PLUGIN_CACHE_DIR equivalent for modules.
+      # Cache only that directory: the rest of .terraform holds backend
+      # config, which differs per environment. The key follows source and
+      # version arguments so unrelated .tf edits do not create a new entry,
+      # and every environment of this stack shares one cache.
+      - name: Fingerprint Terraform module sources
+        id: module-sources
+        run: |
+          fingerprint=$(
+            { grep -R -h -E '^[[:space:]]*(source|version)[[:space:]]*=' --include='*.tf' --exclude-dir=.terraform . || true; } \
+              | sed -E 's/[[:space:]]+/ /g' \
+              | sort \
+              | sha256sum \
+              | awk '{print $1}'
+          )
+          echo "fingerprint=${fingerprint}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Terraform module cache
+        id: module-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ inputs.working-directory }}/.terraform/modules
+          key: terraform-modules-${{ runner.os }}-${{ inputs.working-directory }}@${{ steps.module-sources.outputs.fingerprint }}
+          restore-keys: |
+            terraform-modules-${{ runner.os }}-${{ inputs.working-directory }}@
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -140,6 +168,16 @@ jobs:
             && ssh-keyscan github.com > known_hosts
             && chmod 600 id_rsa known_hosts
             && ssh -i ./id_rsa -o UserKnownHostsFile=./known_hosts"
+
+      # Save only after a successful init, and only on a primary-key miss.
+      # continue-on-error covers parallel environments saving the same key.
+      - name: Save Terraform module cache
+        if: success() && steps.module-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        continue-on-error: true
+        with:
+          path: ${{ inputs.working-directory }}/.terraform/modules
+          key: terraform-modules-${{ runner.os }}-${{ inputs.working-directory }}@${{ steps.module-sources.outputs.fingerprint }}
 
       - name: Terraform Plan
         id: plan
